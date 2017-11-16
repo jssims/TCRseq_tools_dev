@@ -35,7 +35,7 @@ os.system(cmd1)
 
 # ------------ CASSETTE REFERENCE SEQUENCES -----------
 
-dSEQ = {}
+dSEQ = {}								# Dictionary of sequences from the cassette reference file
 
 refinput = open(cassettefile,'r')
 k=0
@@ -54,9 +54,9 @@ print 'Cassette reference loaded!'
 
 # ------------ INPUT FILES ------------------
 
-dFRAG = {}
-dMAPPED = {}
-dNOT = {}
+dFRAG = {}						# accumulate fragment lengths per cassette
+dMAPPED = {}					# accumulate read lengths per cassette
+dNOT = {}						# accumulate cassettes that weren't in the reference
 
 for infile in runfiles:
 	print infile
@@ -90,10 +90,10 @@ for infile in runfiles:
 			try:															# cassette that is a V
 				seq = dSEQ[name1]
 				lenseq = len(seq)
-				index1 = int(seq.find(read1[0:20]))			# matched from the 5'
+				index1 = int(seq.find(read1[0:20]))			# matched from the 5' of where the mapped region on the read starts
 				if index1 > 0:
-					fraglen = lenseq-index1
-					readlen = len(read1)
+					fraglen = lenseq-index1					# what fragment of the reference sequence showed up in that read
+					readlen = len(read1)					# the size of the cassette-mapped read
 					try:
 						lenlist = dFRAG[name1]
 						lenlist.append(fraglen)

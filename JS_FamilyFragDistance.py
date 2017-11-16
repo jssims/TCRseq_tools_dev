@@ -4,6 +4,7 @@ import sys
 import os
 import random
 from string import split
+import string
 
 # -------- FUNCTIONS ---------
 
@@ -21,10 +22,10 @@ def hamdist(str1,str2):		#borrowed from activestate
 
 # -------- INPUT --------------
 
-cassette_ref = sys.argv[1]
-length_ref = sys.argv[2]
-fam_name = sys.argv[3]
-consensus = sys.argv[4]
+cassette_ref = sys.argv[1]		# annotated cassette reference file (e.g. TRA.mm10.ref.txt)
+length_ref = sys.argv[2]		# *_fraglengths_summary.txt from JS_maplocation.py
+fam_name = sys.argv[3]			# curate this yourself
+consensus = sys.argv[4]			# curate this by aligning all the family members of fam_name and finding a consensus sequence that is upstream of where you think the reads end
 
 refstrip = cassette_ref[0]
 
@@ -34,7 +35,7 @@ refstrip = cassette_ref[0]
 
 # ------------ CASSETTE REFERENCE SEQUENCES: INPUT AND TRIM TO START AT CONSENSUS -----------
 
-dCASS = {}
+dREFSEQ = {}
 
 cassnames = []
 sequences = []
@@ -47,28 +48,34 @@ for line in refinput.readlines():
 		name = llist[1]
 		cassnames.append(name)		# this is based on my "TR[A,B].mm10.ref.txt" files
 		seq = llist[7]
-		sequences.append(seq[seq.rfind(str(consensus))+len(consensus):len(seq)+1])
-		dCASS[name] = 5
+		seqtrim = seq[seq.rfind(str(consensus))+len(consensus):len(seq)+1]		# grab the sequence from the 3' end of the consensus to the end of each cassette
+		sequences.append(seqtrim)
+		dREFSEQ[name] = len(seqtrim)
 	k=1
 refinput.close()
 
 print len(cassnames),len(sequences)
 
-#print dSEQ.keys()
+print dREFSEQ.keys()
+
+dCASSLEN = {}
 
 lengthinput = open(length_ref,'r')
 k=0
 for line in lengthinput.readlines():
-	llist = split(line)
-	cassname = llist[0]
-	if k == 1 and cassname.startswith(fam_name):
-		length_diff = float(llist[3]) - float(llist[6])	# this is based on my "TR[A,B].mm10.ref.txt" files
-		dCASS[cassname] = int(max(length_diff,5))
+	if k != 0:
+		llist = split(line,'\t')
+		cassname = llist[0]
+		if k == 1 and cassname.startswith(fam_name):
+	#		length_diff = float(llist[3]) - float(llist[6])	# this is based on my "TR[A,B].mm10.ref.txt" files
+	#		dCASSLEN[cassname] = int(max(length_diff,5))
+	#		dCASSLEN[cassname] = int(length_diff)
+			dCASSLEN[cassname] = int(round(float(llist[3])))		# median length of the reference sequence that appeared in a read
 	k=1
 lengthinput.close()
 
-print dCASS.keys()
-print dCASS.values()
+print dCASSLEN.keys()
+print dCASSLEN.values()
 
 
 # ------------ TRIM SEQUENCES ------------------
@@ -81,9 +88,29 @@ for i in range(0,len(sequences)):
 		pair = i,j
 		frag1 = sequences[i]
 		frag2 = sequences[j]
-		a = min(len(frag1),len(frag2),len(frag1)-dCASS[cassnames[i]],len(frag2)-dCASS[cassnames[j]])
-		dHAM[pair] = hamdist(frag1[0:a],frag2[0:a])
-		print dHAM[pair],a,cassnames[i],len(frag1)-a,cassnames[j],len(frag2)-a
+		try:
+#			a = min(len(frag1),len(frag2),len(frag1)-dCASSLEN[cassnames[i]],len(frag2)-dCASSLEN[cassnames[j]])
+			pos1 = len(frag1)-dCASSLEN[cassnames[i]]
+			pos2 = len(frag2)-dCASSLEN[cassnames[j]]
+			a = max(pos1,pos2)
+			b = min(dCASSLEN[cassnames[i]],dCASSLEN[cassnames[j]])
+#			print cassnames[i],cassnames[j],len(frag1),len(frag2),dCASSLEN[cassnames[i]],dCASSLEN[cassnames[j]],pos1,pos2
+#			print frag1[a:a+b]
+#			print frag2[a:a+b]
+			dHAM[pair] = hamdist(frag1[a:a+b],frag2[a:a+b])
+#			dHAM[pair] = hamdist(frag1[len(frag1)-a:len(frag1)],frag2[len(frag2)-a:len(frag2)])
+#			print pair,frag1,frag2
+#			print dHAM[pair],a,cassnames[i],len(frag1)-a,cassnames[j],len(frag2)-a
+		except KeyError:
+			dHAM[pair]='N/A'
+			pass
+
+for pair in dHAM.keys():
+	try:
+		if int(dHAM[pair]) <= 3:
+			print cassnames[pair[0]],cassnames[pair[1]],dHAM[pair]
+	except ValueError:			# If "N/A"
+		pass
 
 outfile = str(fam_name) + '_hammingtable.tsv'
 
